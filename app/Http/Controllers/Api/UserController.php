@@ -3,64 +3,100 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UserStoreRequest;
+use App\Http\Requests\UserUpdateRequest;
+use App\Http\Resources\UserResource;
 use App\Models\User;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
+    /**
+        * criei um resource para filtrar os dados enviado ao frontend
+        * corrigi a busca do orderby
+        * enviei uma paginacao para melhor visualizacao do usuario
+     */
+    public function index()
+    {
+        $users = User::orderBy('updated_at', 'desc')->paginate(10);
 
-    public function index() {
-
-        return User::select(
-            'id',
-            'name',
-            'email',
-            'phone',
-            'created_at',
-            'updated_at'
-        )->orderBy('updated_at DESC')->get();
+        return [
+            'data' => UserResource::collection($users),
+            'pagination' => [
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'last_page' => $users->lastPage(),
+            ]
+        ];
     }
 
-    public function show($id) {
-
-        return User::select(
-            'id',
-            'name',
-            'email',
-            'phone',
-            'created_at',
-            'updated_at'
-        )->where('id', '=', $id)->firstOrFail();
-
+    /**
+        * arrumei o metodo show para ficar mais clean e de facil manutenção, reaproveitando o UserResource
+     */
+    public function show($id)
+    {
+        $user = User::findOrFail($id);
+        return new UserResource($user);
     }
-    public function store(Request $request) {
 
-        $validator = Validator::make($request->all(), [
-            'name'      => 'required|string|max:255',
-            'email'     => 'required|string|max:255|unique:users',
-            'password'  => 'required|string',
-            'phone'     => 'nullable|string',
-        ]);
+    /**
+        * Criei um UserStoreRequest para fazer as validacoes dos dados vindos do frontend
+        * Criei uma transaction para aplicações mais robustas, assim deixando o codigo mais seguro
+        * Reaproveitei novamente o UserResource para enviar os dados para o frontend
+     */
+    public function store(UserStoreRequest $request)
+    {
+        try {
+            $user = DB::transaction(function () use ($request) {
+                return User::create([
+                    'name'     => $request->name,
+                    'email'    => $request->email,
+                    'password' => Hash::make($request->password),
+                    'phone'    => $request->phone,
+                ]);
+            });
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
+            return response()->json([
+                'data'    => new UserResource($user),
+                'success' => 'Usuário cadastrado com sucesso!',
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao cadastrar o usuário.',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
-
-        $user = User::create([
-            'name'      => $request->name,
-            'email'     => $request->email,
-            'password'  => Hash::make($request->password),
-            'phone'     => $request->phone,
-        ]);
-
-        $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'data' => $user
-        ]);
-
     }
 
+    /**
+        * Criei um UserUpdateRequest para fazer as validacoes dos dados vindos do frontend
+        * A transaction tem o mesmo intuito do store
+        * Reaproveitei novamente o UserResource para enviar os dados para o frontend
+     */
+    public function update(UserUpdateRequest $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        try {
+            DB::transaction(function () use ($request, $user) {
+                $user->update([
+                    'name'  => $request->name,
+                    'email' => $request->email,
+                    'phone' => $request->phone,
+                ]);
+            });
+
+            return response()->json([
+                'data'    => new UserResource($user),
+                'success' => 'Usuário atualizado com sucesso!',
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao atualizar o usuário.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

@@ -19,9 +19,12 @@ Route::get('/csrf-token', function () {
     return response()->json(['csrf_token' => csrf_token()]);
 });
 
-Route::get('/users', [UserController::class, 'index']);
-Route::get('/user/{id}', [UserController::class, 'show'])->where('id', '[0-9]+');
-Route::post('/user', [UserController::class, 'store']);
+Route::controller(UserController::class)->group(function() {
+    Route::get('/users', 'index');
+    Route::get('/user/{id}', 'show')->where('id', '[0-9]+');
+    Route::post('/user', 'store');
+    Route::put('/user/{id}', 'update')->where('id', '[0-9]+');
+});
 
 /*
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
