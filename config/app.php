@@ -212,4 +212,7 @@ return [
         // 'ExampleClass' => App\Example\ExampleClass::class,
     ])->toArray(),
 
+    'commands' => [
+        App\Console\Commands\ColetarNoticiasUOL::class,
+    ],
 ];
